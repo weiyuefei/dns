@@ -555,6 +555,36 @@ func TestShutdownTCP(t *testing.T) {
 	}
 }
 
+func TestShutdownTCPNilError(t *testing.T) {
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("unable to run test server: %v", err)
+	}
+
+	server := &Server{Listener: l, ReadTimeout: time.Hour, WriteTimeout: time.Hour}
+
+	waitLock := sync.Mutex{}
+	waitLock.Lock()
+	server.NotifyStartedFunc = waitLock.Unlock
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.ActivateAndServe()
+		l.Close()
+	}()
+
+	waitLock.Lock()
+
+	err = server.Shutdown()
+	if err != nil {
+		t.Fatalf("could not shutdown test TCP server, %v", err)
+	}
+
+	if err := <-errCh; err != nil {
+		t.Errorf("ActivateAndServe returned error, %v", err)
+	}
+}
+
 func TestShutdownTLS(t *testing.T) {
 	cert, err := tls.X509KeyPair(CertPEMBlock, KeyPEMBlock)
 	if err != nil {
